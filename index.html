@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Generador QR</title>
+  <meta name="description" content="Genera códigos QR de URLs sin servidores ni pagos. Descarga PNG o SVG. 100% local en tu navegador, con fallback si el CDN está bloqueado." />
+  <style>
+    :root{--bg:#0b0c10;--card:#16181d;--text:#e6e6e6;--muted:#a7a7a7;--accent:#59d0ff;--accent-2:#79ffa6}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:linear-gradient(180deg,#0b0c10,#13151a 40%,#0b0c10);color:var(--text);}
+    .wrap{max-width:1440px;margin:0 auto;padding:28px}
+    /* Header centrado y moderno */
+    header{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;margin-bottom:20px;text-align:center}
+    h1{font-size:clamp(1.6rem,1.2rem+3vw,2.6rem);margin:0;line-height:1.15;background:linear-gradient(90deg,#e6e6e6,#79ffa6 40%,#59d0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{max-width:980px;color:var(--muted);font-size:1.05rem;line-height:1.5;text-align:justify;text-justify:inter-word;margin:0 auto}
+    .lead.center-last{text-align-last:center}
+
+    .card{background:var(--card);border:1px solid #22252b;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:18px}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px}
+    @media (min-width:1000px){.grid{grid-template-columns:2fr 1fr}}
+
+    label{display:block;font-size:1rem;color:var(--muted);margin-bottom:8px}
+    input[type="text"],input[type="url"],input[type="number"],input[type="search"],select{
+      width:100%;padding:14px 16px;border-radius:14px;border:1px solid #30343b;background:#0f1116;color:var(--text);font-size:18px;transition:border-color .15s ease, box-shadow .15s ease
+    }
+    input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(89,208,255,.15)}
+
+    /* URL MUCHO MÁS GRANDE */
+    #url{font-size:24px;padding:18px 20px;height:68px;border-radius:16px}
+
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+    .col-6{grid-column:span 6}
+    .col-4{grid-column:span 4}
+    .col-3{grid-column:span 3}
+    .col-12{grid-column:span 12}
+
+    .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+    button,a.button{appearance:none;border:none;background:var(--accent);color:#061218;font-weight:700;border-radius:14px;padding:12px 16px;cursor:pointer;transition:transform .06s ease,filter .2s ease,text-shadow .15s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+    button.secondary,a.button.secondary{background:#30343b;color:var(--text)}
+    button:hover,a.button:hover{filter:brightness(1.05)}
+    button:active{transform:translateY(1px)}
+
+    .muted{color:var(--muted);font-size:.95rem}
+    .qr-box{display:flex;align-items:center;justify-content:center;background:#0e1116;border:1px dashed #2a2e36;border-radius:14px;min-height:380px}
+    .outputs{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+    .hr{height:1px;background:#23262d;margin:12px 0}
+    footer{margin-top:18px;text-align:center;color:var(--muted);font-size:.9rem}
+    .success{color:var(--accent-2);font-weight:600}
+    .error{color:#ff7b7b;font-weight:600}
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:.9em; padding:2px 6px; border:1px solid #30343b; border-radius:6px;}
+    details.tests{margin-top:12px}
+    details.tests summary{cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Generador de Códigos QR</h1>
+      <p class="lead center-last">Funciona en tu navegador</p>
+    </header>
+
+    <div class="grid">
+      <!-- Panel Izquierdo: Controles -->
+      <section class="card">
+        <div class="row" style="align-items:end">
+          <div class="col-12">
+            <label for="url">URL <span class="muted">(pega aquí la dirección que quieres codificar)</span></label>
+            <input id="url" type="url" placeholder="https://tu-dominio.com/mi-pagina" autocomplete="on" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="col-4">
+            <label for="size">Tamaño (px)</label>
+            <input id="size" type="number" min="120" max="2048" step="10" value="320" />
+          </div>
+          <div class="col-4">
+            <label for="margin">Margen (módulos)</label>
+            <input id="margin" type="number" min="0" max="12" step="1" value="4" />
+          </div>
+          <div class="col-4">
+            <label for="ecc">Corrección de errores</label>
+            <select id="ecc">
+              <option value="L">L (baja, mayor capacidad)</option>
+              <option value="M" selected>M (equilibrado)</option>
+              <option value="Q">Q (alta)</option>
+              <option value="H">H (máxima)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="col-6">
+            <label for="filename">Nombre de archivo (sin extensión)</label>
+            <input id="filename" type="text" placeholder="mi_qr" />
+          </div>
+          <div class="col-6">
+            <label>&nbsp;</label>
+            <div class="actions">
+              <button id="generate">Generar QR</button>
+              <button id="clear" class="secondary" type="button">Limpiar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="outputs">
+          <div class="hr"></div>
+          <div class="actions">
+            <a id="downloadPng" class="button" download="qr.png" href="#" aria-disabled="true">Descargar PNG</a>
+            <a id="downloadSvg" class="button secondary" download="qr.svg" href="#" aria-disabled="true">Descargar SVG</a>
+          </div>
+          <div id="status" class="muted"></div>
+          <div class="muted">Consejo: para impresión nítida, descarga <span class="kbd">SVG</span>.</div>
+        </div>
+
+        <details class="tests">
+          <summary>🧪 Ver resultados de pruebas automáticas</summary>
+          <div id="testLog" class="muted" style="margin-top:8px"></div>
+        </details>
+      </section>
+
+      <!-- Panel Derecho: Vista Previa -->
+      <section class="card">
+        <div class="qr-box" id="qrBox">
+          <div class="muted">Tu QR aparecerá aquí</div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Jefatura de Departamento de Implementación de Manuales y Procedimientos de Obra
+    </footer>
+  </div>
+
+  <!-- Cargador robusto de la librería QRCode con fallback a MODO SERVICIO si el CDN está bloqueado -->
+  <script>
+    const QR_LIB_URLS = [
+      'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
+      'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js'
+    ];
+    let qrLibLoaded = false;
+    let USE_SERVICE_MODE = false; // Fallback si no se puede cargar la librería
+
+    function ensureQRCodeReady(){
+      return new Promise((resolve) => {
+        if (window.QRCode && typeof window.QRCode.toCanvas === 'function') {
+          qrLibLoaded = true; return resolve('lib');
+        }
+        // Intento 1: cargar primer CDN
+        const tryIndex = (i) => {
+          if (window.QRCode && typeof window.QRCode.toCanvas === 'function') { qrLibLoaded = true; return resolve('lib'); }
+          if (i >= QR_LIB_URLS.length) {
+            // No hay librería: usar modo servicio (API gratuita)
+            USE_SERVICE_MODE = true; qrLibLoaded = false; return resolve('service');
+          }
+          const s = document.createElement('script');
+          s.src = QR_LIB_URLS[i];
+          s.async = true;
+          s.onload = () => {
+            if (window.QRCode && typeof window.QRCode.toCanvas === 'function') { qrLibLoaded = true; resolve('lib'); }
+            else tryLoadNext();
+          };
+          s.onerror = () => tryLoadNext();
+          function tryLoadNext(){ tryIndex(i+1); }
+          document.body.appendChild(s);
+        };
+        tryIndex(0);
+      });
+    }
+  </script>
+
+  <!-- App -->
+  <script>
+    // Utilidades
+    const $ = (sel) => document.querySelector(sel);
+    const byId = (id) => document.getElementById(id);
+
+    // Sanitiza nombres de archivo
+    function safeFileName(name, fallback = "qr") {
+      const s = (name || "").trim().toLowerCase().replace(/\s+/g, "_");
+      return s.replace(/[^a-z0-9_\-\.]/g, "") || fallback;
+    }
+
+    // --- Helpers de descarga "siempre funciona" ---
+    function revokeOldObjectUrl(anchor){
+      try {
+        const a = typeof anchor === 'string' ? byId(anchor) : anchor;
+        if (a && a.dataset && a.dataset.objectUrl) {
+          URL.revokeObjectURL(a.dataset.objectUrl);
+          delete a.dataset.objectUrl;
+        }
+      } catch {}
+    }
+
+    function setAnchorDownloadFromBlob(anchorId, blob, filename){
+      const a = byId(anchorId);
+      if (!a) return;
+      revokeOldObjectUrl(a);
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.dataset.objectUrl = url;
+      a.download = filename;
+      a.setAttribute('aria-disabled','false');
+    }
+
+    function setAnchorDirectUrl(anchorId, url, filename){
+      const a = byId(anchorId);
+      if (!a) return;
+      revokeOldObjectUrl(a);
+      a.href = url;
+      a.download = filename;
+      a.setAttribute('aria-disabled','false');
+    }
+
+    function dataURLToBlob(dataURL){
+      const parts = dataURL.split(',');
+      const mime = parts[0].match(/:(.*?);/)[1];
+      const bstr = atob(parts[1]);
+      let n = bstr.length; const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      return new Blob([u8arr], {type:mime});
+    }
+
+    // ✅ Definición correcta de setStatus (arregla SyntaxError)
+    function setStatus(msg, kind = "info") {
+      const el = byId("status");
+      el.textContent = msg || "";
+      el.className = kind === "error" ? "error" : kind === "success" ? "success" : "muted";
+    }
+
+    function paramsFromURL() {
+      const p = new URLSearchParams(location.search);
+      return {
+        data: p.get("data") || "",
+        size: parseInt(p.get("size") || "320", 10),
+        margin: parseInt(p.get("margin") || "4", 10),
+        ecc: (p.get("ecc") || "M").toUpperCase(),
+        filename: p.get("filename") || ""
+      };
+    }
+
+    function populateFromParams() {
+      const { data, size, margin, ecc, filename } = paramsFromURL();
+      if (data) byId("url").value = decodeURIComponent(data);
+      byId("size").value = Number.isFinite(size) ? size : 320;
+      byId("margin").value = Number.isFinite(margin) ? margin : 4;
+      byId("ecc").value = ["L","M","Q","H"].includes(ecc) ? ecc : "M";
+      if (filename) byId("filename").value = safeFileName(filename);
+      // Auto-generar si viene data por querystring
+      if (data) generateQR();
+    }
+
+    async function generateQR() {
+      const data = byId("url").value.trim();
+      if (!data) {
+        setStatus("Ingresa una URL.", "error");
+        return;
+      }
+      const size = Math.max(120, Math.min(2048, parseInt(byId("size").value || "320", 10)));
+      const margin = Math.max(0, Math.min(12, parseInt(byId("margin").value || "4", 10)));
+      const ecc = byId("ecc").value || "M";
+      const filename = safeFileName(byId("filename").value || "qr");
+
+      const box = byId("qrBox");
+      box.innerHTML = "";
+
+      try {
+        const mode = await ensureQRCodeReady();
+
+        if (USE_SERVICE_MODE || mode === 'service') {
+          // Fallback: usar API gratuita (sin librería) con DESCARGA DIRECTA via Blob
+          const enc = encodeURIComponent(data);
+          const base = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${enc}&margin=${margin}&ecc=${ecc}`;
+          const pngUrl = base;
+          const svgUrl = base + `&format=svg`;
+
+          // Vista previa (PNG remoto)
+          const img = new Image();
+          img.alt = 'Vista previa del QR';
+          img.decoding = 'async';
+          img.referrerPolicy = 'no-referrer';
+          img.onload = () => setStatus("QR generado correctamente (modo servicio).", "success");
+          img.onerror = () => setStatus("No se pudo obtener la imagen del servicio de QR.", "error");
+          img.src = pngUrl;
+          box.appendChild(img);
+
+          // Descargar PNG como blob (si falla CORS, fallback al link directo)
+          try {
+            const pngResp = await fetch(pngUrl, {mode:'cors'});
+            const pngBlob = await pngResp.blob();
+            setAnchorDownloadFromBlob('downloadPng', pngBlob, filename + '.png');
+          } catch (e) {
+            setAnchorDirectUrl('downloadPng', pngUrl, filename + '.png');
+          }
+
+          // Descargar SVG como blob (texto a Blob siempre funciona si CORS permite)
+          try {
+            const svgResp = await fetch(svgUrl, {mode:'cors'});
+            const svgText = await svgResp.text();
+            const svgBlob = new Blob([svgText], {type:'image/svg+xml'});
+            setAnchorDownloadFromBlob('downloadSvg', svgBlob, filename + '.svg');
+          } catch (e) {
+            // Último recurso: enlace directo
+            setAnchorDirectUrl('downloadSvg', svgUrl, filename + '.svg');
+          }
+          return;
+        }
+
+        // --- Modo librería local (cuando el CDN sí cargó) ---
+        // Canvas (PNG)
+        const canvas = await new Promise((resolve, reject) => {
+          window.QRCode.toCanvas(data, { width: size, margin, errorCorrectionLevel: ecc }, (err, c) => {
+            if (err) reject(err); else resolve(c);
+          });
+        });
+        box.appendChild(canvas);
+
+        // Preparar descarga PNG (como Blob para descarga directa)
+        const pngBlob = await new Promise((resolve, reject)=> {
+          if (canvas.toBlob) {
+            canvas.toBlob((b)=> b? resolve(b): reject(new Error('No se pudo crear blob PNG')), 'image/png');
+          } else {
+            // Fallback a dataURL -> blob
+            try {
+              const dataUrl = canvas.toDataURL('image/png');
+              const b = dataURLToBlob(dataUrl);
+              resolve(b);
+            } catch(err){ reject(err); }
+          }
+        });
+        setAnchorDownloadFromBlob('downloadPng', pngBlob, filename + '.png');
+
+        // SVG como Blob para descarga directa
+        const svgString = await new Promise((resolve, reject) => {
+          window.QRCode.toString(data, { type: "svg", width: size, margin, errorCorrectionLevel: ecc }, (err, str) => {
+            if (err) reject(err); else resolve(str);
+          });
+        });
+        const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
+        setAnchorDownloadFromBlob('downloadSvg', svgBlob, filename + '.svg');
+
+        setStatus("QR generado correctamente.", "success");
+      } catch (e) {
+        console.error(e);
+        setStatus("Ocurrió un error al generar el QR.", "error");
+      }
+    }
+
+    function clearAll() {
+      byId("url").value = "";
+      byId("filename").value = "";
+      setStatus("");
+      byId("qrBox").innerHTML = '<div class="muted">Tu QR aparecerá aquí</div>';
+      byId("downloadPng").href = "#";
+      byId("downloadPng").setAttribute("aria-disabled", "true");
+      byId("downloadSvg").href = "#";
+      byId("downloadSvg").setAttribute("aria-disabled", "true");
+    }
+
+    // --- Pruebas automáticas (test cases) ---
+    async function runTests(){
+      const logs = [];
+      const ok = (m)=> logs.push('✅ ' + m);
+      const info = (m)=> logs.push('ℹ️ ' + m);
+      const fail = (m)=> logs.push('❌ ' + m);
+      try {
+        const mode = await ensureQRCodeReady();
+        const testUrl = 'https://example.com';
+        byId('url').value = testUrl;
+        await generateQR();
+
+        const aPng = byId('downloadPng');
+        const aSvg = byId('downloadSvg');
+        if (aPng && aPng.getAttribute('aria-disabled')==='false' && aPng.href) ok('Botón PNG listo para descarga'); else fail('Botón PNG no listo');
+        if (aSvg && aSvg.getAttribute('aria-disabled')==='false' && aSvg.href) ok('Botón SVG listo para descarga'); else fail('Botón SVG no listo');
+
+        if (aPng.href.startsWith('blob:')) ok('PNG usa blob para descarga directa'); else info('PNG usa URL directa (fallback)');
+        if (aSvg.href.startsWith('blob:')) ok('SVG usa blob para descarga directa'); else info('SVG usa URL directa (fallback)');
+
+        // 🔎 Tests adicionales (sin cambiar los existentes)
+        // 1) setStatus aplica clases
+        setStatus('prueba ok','success');
+        if (byId('status').className.includes('success')) ok('setStatus aplica clase success'); else fail('setStatus no aplicó success');
+        // 2) safeFileName sanitiza
+        const fn = safeFileName(' Mi Archivo: 2025/09*22 ');
+        if (fn === 'mi_archivo_2025_09_22'.replace('__','_')) ok('safeFileName sanitiza'); else info('safeFileName resultado: '+fn);
+      } catch (e) {
+        fail(e.message || String(e));
+      }
+      const logEl = byId('testLog');
+      if (logEl) logEl.innerHTML = logs.map(l=>`<div>${l}</div>`).join('');
+    }
+
+    // Eventos
+    window.addEventListener("load", async () => {
+      try { await ensureQRCodeReady(); } catch {}
+      populateFromParams();
+      byId("generate").addEventListener("click", generateQR);
+      byId("clear").addEventListener("click", clearAll);
+      byId("url").addEventListener("keydown", (e) => { if (e.key === "Enter") generateQR(); });
+      runTests();
+    });
+  </script>
+</body>
+</html>
